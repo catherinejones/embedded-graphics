@@ -1,5 +1,5 @@
 use crate::pixelcolor::{
-    raw::{RawData, RawU16, RawU24},
+    raw::{RawData, RawU12, RawU16, RawU24},
     PixelColor,
 };
 use core::fmt;
@@ -227,7 +227,7 @@ macro_rules! rgb_color {
     };
 }
 
-rgb_color!(Rgb444, RawU16, u16, Rgb = (4, 4, 4));
+rgb_color!(Rgb444, RawU12, u16, Rgb = (4, 4, 4));
 
 rgb_color!(Rgb555, RawU16, u16, Rgb = (5, 5, 5));
 rgb_color!(Bgr555, RawU16, u16, Bgr = (5, 5, 5));
@@ -243,6 +243,17 @@ rgb_color!(Bgr888, RawU24, u32, Bgr = (8, 8, 8));
 mod tests {
     use super::*;
     use crate::pixelcolor::IntoStorage;
+
+    /// Convert color to integer and back again to test bit positions
+    fn test_bpp12<C>(color: C, value: u16)
+    where
+        C: PixelColor<Raw = RawU12> + fmt::Debug,
+    {
+        let value = RawU12::new(value);
+
+        assert_eq!(color.into(), value);
+        assert_eq!(C::from(value), color);
+    }
 
     /// Convert color to integer and back again to test bit positions
     fn test_bpp16<C>(color: C, value: u16)
@@ -268,9 +279,9 @@ mod tests {
 
     #[test]
     pub fn bit_positions_rgb444() {
-        test_bpp16(Rgb444::new(0b1001, 0, 0), 0b1001 << 4 + 4);
-        test_bpp16(Rgb444::new(0, 0b1001, 0), 0b1001 << 4);
-        test_bpp16(Rgb444::new(0, 0, 0b1001), 0b1001 << 0);
+        test_bpp12(Rgb444::new(0b1001, 0, 0), 0b1001 << 4 + 4);
+        test_bpp12(Rgb444::new(0, 0b1001, 0), 0b1001 << 4);
+        test_bpp12(Rgb444::new(0, 0, 0b1001), 0b1001 << 0);
     }
 
     #[test]
@@ -331,8 +342,8 @@ mod tests {
 
     #[test]
     pub fn unused_bits_are_ignored() {
-        let color: Rgb444 = RawU16::from(0xFFFF).into();
-        assert_eq!(RawU16::from(color).into_inner(), 0xFFF);
+        let color: Rgb444 = RawU12::from(0xFFFF).into();
+        assert_eq!(RawU12::from(color).into_inner(), 0xFFF);
 
         let color: Rgb555 = RawU16::from(0xFFFF).into();
         assert_eq!(RawU16::from(color).into_inner(), 0x7FFF);

@@ -1,5 +1,5 @@
 use crate::pixelcolor::{
-    raw::{RawU1, RawU16, RawU2, RawU24, RawU32, RawU4, RawU8},
+    raw::{RawU1, RawU12, RawU16, RawU2, RawU24, RawU32, RawU4, RawU8},
     PixelColor,
 };
 
@@ -44,6 +44,7 @@ impl_to_bytes!(RawU1, [u8; 1]);
 impl_to_bytes!(RawU2, [u8; 1]);
 impl_to_bytes!(RawU4, [u8; 1]);
 impl_to_bytes!(RawU8, [u8; 1]);
+impl_to_bytes!(RawU12, [u8; 2]);
 impl_to_bytes!(RawU16, [u8; 2]);
 impl_to_bytes!(RawU32, [u8; 4]);
 
@@ -148,6 +149,38 @@ mod tests {
     fn bpp8() {
         assert_all_orders(Gray8::new(0), [0]);
         assert_all_orders(Gray8::new(255), [255]);
+    }
+
+    #[test]
+    fn bpp12_rgb_be() {
+        assert_eq!(
+            Rgb444::new(15, 0, 0).to_be_bytes(),
+            [0b0000_1111, 0b000_00000]
+        );
+        assert_eq!(
+            Rgb444::new(0, 15, 0).to_be_bytes(),
+            [0b0000_0000, 0b1111_0000]
+        );
+        assert_eq!(
+            Rgb444::new(0, 0, 15).to_be_bytes(),
+            [0b0000_0000, 0b0000_1111]
+        );
+    }
+
+    #[test]
+    fn bpp12_rgb_le() {
+        assert_eq!(
+            Rgb444::new(15, 0, 0).to_le_bytes(),
+            [0b0000_0000, 0b0000_1111]
+        );
+        assert_eq!(
+            Rgb444::new(0, 15, 0).to_le_bytes(),
+            [0b1111_0000, 0b0000_0000]
+        );
+        assert_eq!(
+            Rgb444::new(0, 0, 15).to_le_bytes(),
+            [0b0000_1111, 0b0000_0000]
+        );
     }
 
     #[test]

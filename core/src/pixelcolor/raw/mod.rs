@@ -227,6 +227,7 @@ impl_raw_data!(RawU1: u8, 1, 0x01, "1 bit");
 impl_raw_data!(RawU2: u8, 2, 0x03, "2 bits");
 impl_raw_data!(RawU4: u8, 4, 0x0F, "4 bits");
 impl_raw_data!(RawU8: u8, 8, 0xFF, "8 bits");
+impl_raw_data!(RawU12: u16, 12, 0xFFF, "12 bits");
 impl_raw_data!(RawU16: u16, 16, 0xFFFF, "16 bits");
 impl_raw_data!(RawU24: u32, 24, 0xFF_FFFF, "24 bits");
 impl_raw_data!(RawU32: u32, 32, 0xFFFF_FFFF, "32 bits");
@@ -264,6 +265,7 @@ mod tests {
         assert_eq!(RawU1::new(u8::max_value()).0, 0x1);
         assert_eq!(RawU2::new(u8::max_value()).0, 0x3);
         assert_eq!(RawU4::new(u8::max_value()).0, 0xF);
+        assert_eq!(RawU12::new(u16::max_value()).0, 0xFFF);
         assert_eq!(RawU24::new(u32::max_value()).0, 0xFFFFFF);
     }
 }
