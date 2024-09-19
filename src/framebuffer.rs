@@ -9,8 +9,8 @@ use crate::{
     iterator::raw::RawDataSlice,
     pixelcolor::{
         raw::{
-            BigEndian, ByteOrder, LittleEndian, RawData, RawU1, RawU16, RawU2, RawU24, RawU32,
-            RawU4, RawU8, ToBytes,
+            BigEndian, ByteOrder, LittleEndian, RawData, RawU1, RawU12, RawU16, RawU2, RawU24,
+            RawU32, RawU4, RawU8, ToBytes,
         },
         PixelColor,
     },
@@ -233,6 +233,64 @@ where
     }
 }
 
+impl<C, const WIDTH: usize, const HEIGHT: usize, const N: usize>
+    Framebuffer<C, RawU12, BigEndian, WIDTH, HEIGHT, N>
+where
+    C: PixelColor<Raw = RawU12>,
+{
+    /// Sets the color of a pixel.
+    ///
+    /// Setting a pixel outside the framebuffer's bounding box will be a noop.
+    pub fn set_pixel(&mut self, p: Point, c: C) {
+        if let (Ok(x), Ok(y)) = (usize::try_from(p.x), usize::try_from(p.y)) {
+            if x < WIDTH && y < HEIGHT {
+                let x = p.x as usize;
+                let y = p.y as usize;
+
+                let pixel = &c.into().to_be_bytes();
+
+                let index: usize = y * WIDTH + x;
+                let byte_index: usize = (index * 12) / 8;
+
+                // check if we're starting halfway through a byte.
+                if (index * 12) % 8 != 0 {
+                    // Only update half of the byte, not the whole byte.
+                    self.data[byte_index] = (pixel[0] & 0x0F) | (self.data[byte_index] & 0xF0);
+                    // And update the next byte.
+                    self.data[byte_index + 1] = pixel[1];
+                    return;
+                }
+
+                // if we're starting at the start of this byte, we'll only
+                // update the start of the next byte.
+                self.data[byte_index] = (pixel[0] << 4) | ((pixel[1] >> 4) & 0x0F);
+                self.data[byte_index + 1] =
+                    ((pixel[1] << 4) & 0xF0) | (self.data[byte_index + 1] & 0x0F);
+            }
+        }
+    }
+}
+
+impl<C, const WIDTH: usize, const HEIGHT: usize, const N: usize> DrawTarget
+    for Framebuffer<C, RawU12, BigEndian, WIDTH, HEIGHT, N>
+where
+    C: PixelColor<Raw = RawU12> + Into<RawU12>,
+{
+    type Color = C;
+    type Error = Infallible;
+
+    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Pixel<Self::Color>>,
+    {
+        for Pixel(p, c) in pixels {
+            self.set_pixel(p, c);
+        }
+
+        Ok(())
+    }
+}
+
 macro_rules! impl_bytes {
     ($raw_type:ty, $bo_type:ty, $to_bytes_fn:ident) => {
         impl<C, const WIDTH: usize, const HEIGHT: usize, const N: usize>
@@ -310,7 +368,7 @@ mod tests {
         geometry::Point,
         image::Image,
         mock_display::MockDisplay,
-        pixelcolor::{BinaryColor, Gray2, Gray4, Gray8, Rgb565, Rgb888, RgbColor},
+        pixelcolor::{BinaryColor, Gray2, Gray4, Gray8, Rgb444, Rgb565, Rgb888, RgbColor},
         primitives::{Primitive, PrimitiveStyle},
         Drawable,
     };
@@ -538,6 +596,67 @@ mod tests {
     }
 
     #[test]
+    fn raw_u12_be() {
+        let mut fb = <framebuffer!(Rgb444, BigEndian, 3, 2)>::new();
+
+        fb.draw_iter(
+            [
+                ((0, 0), 0x100),  //
+                ((2, 1), 0xFFF),  //
+                ((1, 0), 0x123),  //
+                ((0, 1), 0x000),  //
+                ((1, 1), 0x654),  //
+                ((-1, 0), 0xFFF), //
+                ((0, -1), 0xFFF), //
+                ((3, 0), 0xFFF),  //
+                ((0, 2), 0xFFF),  //
+            ]
+            .iter()
+            .map(|(p, c)| Pixel(Point::from(*p), Rgb444::from(RawU12::new(*c)))),
+        )
+        .unwrap();
+
+        assert_eq!(
+            fb.data(),
+            &[
+                0x10, 0x01, 0x23, 0x00, 0x00, //
+                0x00, 0x65, 0x4F, 0xFF, 0x00, //
+            ]
+        );
+    }
+
+    #[test]
+    fn raw_u12_red_be() {
+        let mut fb = <framebuffer!(Rgb444, BigEndian, 3, 2)>::new();
+
+        fb.draw_iter(
+            [
+                ((0, 0), 0xF00),  //
+                ((1, 0), 0xF00),  //
+                ((2, 0), 0xF00),  //
+                ((0, 1), 0xF00),  //
+                ((1, 1), 0xF00),  //
+                ((2, 1), 0xF00),  //
+                ((-1, 0), 0x111), // out of bounds
+                ((0, -1), 0x111), // out of bounds
+                ((3, 0), 0x111),  // out of bounds
+                ((0, 2), 0x111),  // out of bounds
+            ]
+            .iter()
+            .map(|(p, c)| Pixel(Point::from(*p), Rgb444::from(RawU12::new(*c)))),
+        )
+        .unwrap();
+
+        assert_eq!(
+            fb.data(),
+            &[
+                0xF0, 0x0F, 0x00, 0xF0, 0x0F, //
+                0x00, 0xF0, 0x0F, 0x00, 0x00, //
+            ]
+        );
+    }
+
+    #[test]
     fn raw_u24_le() {
         let mut fb = <framebuffer!(Rgb888, 3, 2)>::new();
 
@@ -725,6 +844,7 @@ mod tests {
         <framebuffer!(Gray2, 10, 10)>::new().set_pixel(Point::zero(), Gray2::WHITE);
         <framebuffer!(Gray4, 10, 10)>::new().set_pixel(Point::zero(), Gray4::WHITE);
         <framebuffer!(Gray8, 10, 10)>::new().set_pixel(Point::zero(), Gray8::WHITE);
+        <framebuffer!(Rgb444, BigEndian, 10, 10)>::new().set_pixel(Point::zero(), Rgb444::WHITE);
         <framebuffer!(Rgb565, 10, 10)>::new().set_pixel(Point::zero(), Rgb565::WHITE);
         <framebuffer!(Rgb888, 10, 10)>::new().set_pixel(Point::zero(), Rgb888::WHITE);
         <framebuffer!(U32Color, 10, 10)>::new().set_pixel(Point::zero(), U32Color(0));
